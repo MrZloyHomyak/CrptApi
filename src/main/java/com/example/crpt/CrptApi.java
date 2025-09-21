@@ -1,8 +1,13 @@
 package main.java.com.example.crpt;
 
+import java.io.IOException;
+import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
@@ -40,12 +45,124 @@ public class CrptApi {
     }
 
     public void createDocument(Document document, String signature) {
+        createDocument(document, signature, defaultProductGroup);
+    }
+    public void createDocument(Document document, String signature, String productGroup) {
+        waitForRequestLimit();
 
+        try{
+            String urlWithParams = buildRequestUrl(productGroup);
+            String requestBody = buildRequestBody(document, signature, "LP_INTRODUCE_GOODS");
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(urlWithParams))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + getAuthToken())
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                System.out.println("Document created successfully: " + response.body());
+            } else {
+                System.err.println("Document creation failed. Status code:  " + response.statusCode());
+                System.err.println("Response body: " + response.body());
+            }
+        } catch (IOException | InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Failed to create document", e);
+        }
     }
 
+    private void waitForRequestLimit() {
+        lock.lock();
+        try {
+            cleanOldRequests();
+            while (requestTimestamps.size() >= requestLimit) {
+                try{
+                    Long sleepTime = calculateSleepTime();
+                    TimeUnit.MILLISECONDS.sleep(sleepTime);
+                    cleanOldRequests();
+                }
+                catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Thread interrupted while waiting for request limit", e);
+                }
+            }
+            requestTimestamps.add(Instant.now());
+        } finally {
+            lock.unlock();
+        }
+    }
 
+    private void cleanOldRequests() {
+        Instant threshold = Instant.now().minusMillis(timeUnit.toMillis(1));
+        while(!requestTimestamps.isEmpty() && requestTimestamps.peek().isBefore(threshold)) {
+            requestTimestamps.poll();
+        }
+    }
 
+    private Long calculateSleepTime() {
+        if(requestTimestamps.isEmpty()) {
+            return 0L;
+        }
+        Instant oldestRequest = requestTimestamps.peek();
+        Instant nextAvailableTime = oldestRequest.plusMillis(timeUnit.toMillis(1));
+        return Math.max(0, Duration.between(Instant.now(), nextAvailableTime).toMillis());
+    }
 
+    private String buildRequestUrl(String productGroup) {
+        return apiUrl + "?pg=" + productGroup;
+    }
+
+    private String buildRequestBody(Document document, String signature, String documentType) {
+        String documentJson = document.toJsonString();
+        String base64Document = Base64.getEncoder().encodeToString(documentJson.getBytes());
+
+        DocumentRequest request = new DocumentRequest(base64Document, "MANUAL", signature, documentType);
+        return request.toJsonString();
+    }
+
+    private String getAuthToken() {
+        //Заглушка. В реальности для аутентификации см. страницы 7-9 документации.
+        return "token";
+    }
+
+    private static class DocumentRequest {
+        private final String productDocument;
+        private final String documentFormat;
+        private final String signature;
+        private final String type;
+        public DocumentRequest(String productDocument, String documentFormat, String signature, String type) {
+            this.productDocument = productDocument;
+            this.documentFormat = documentFormat;
+            this.signature = signature;
+            this.type = type;
+        }
+
+        public String toJsonString() {
+            return String.format(
+                    "{\"product_document\":\"%s\",\"document_format\":\"%s\",\"signature\":\"%s\",\"type\":\"%s\"}",
+                    escapeJsonString(productDocument),
+                    escapeJsonString(documentFormat),
+                    escapeJsonString(signature),
+                    escapeJsonString(type)
+            );
+        }
+
+        public String escapeJsonString(String value) {
+            if (value == null) {
+                return "";
+            }
+            return value.replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace("\b", "\\b")
+                    .replace("\f", "\\f")
+                    .replace("\n", "\\n")
+                    .replace("\r", "\\r")
+                    .replace("\t", "\\t");
+        }
+    }
     public static class Document {
         private Description description;
         private String doc_id;
@@ -209,14 +326,17 @@ public class CrptApi {
         public Description(String participant_inn) {
             this.participant_inn = participant_inn;
         }
+
         public String getParticipant_inn() {
             return participant_inn;
         }
         public void setParticipant_inn(String participant_inn) {
             this.participant_inn = participant_inn;
         }
+
         public String toJsonString() {
-            return String.format("{\"participant_inn\":\"%s\"}", participant_inn);
+            return String.format("{\"participant_inn\":\"%s\"}",
+                    escapeJsonString(participant_inn != null ? participant_inn : ""));
         }
         public String escapeJsonString(String value) {
             if(value == null) return "";
@@ -339,7 +459,34 @@ public class CrptApi {
 
     }
 
-    public static void main(String[] args) {
 
+    // Пример использования
+    public static void main(String[] args) {
+        // Создаём API
+        CrptApi api = new CrptApi(TimeUnit.SECONDS, 5, "milk");
+        // Создаём документ
+        Document document = new Document();
+        Description description = new Description();
+        description.setParticipant_inn("1234567890");
+        document.setDescription(description);
+        document.setDoc_id("DOC-12345");
+        document.setDoc_status("IN_PROGRESS");
+        document.setDoc_type("LP_INTRODUCE_GOODS");
+        document.setOwner_inn("1234567890");
+        document.setParticipant_inn("0987654321");
+        document.setProducer_inn("1122334455");
+        document.setProduction_date("2023-12-20");
+        document.setProduction_type("LOCAL");
+        // Создаём продукт
+        Product product = new Product();
+        product.setCertificate_document("CERT-001");
+        product.setCertificate_document_date("2023-12-01");
+        product.setCertificate_document_number("123456");
+        product.setTnved_code("0401");
+        product.setUit_code("010463003407002921wskg1E44R1qym2406401");
+        document.setProducts(new Product[]{product});
+        String signature = "base64_signature_here";     // В реальности подпись подписывается УКЭП
+
+        api.createDocument(document, signature, "milk");
     }
 }
