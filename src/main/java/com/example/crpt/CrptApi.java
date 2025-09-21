@@ -51,7 +51,7 @@ public class CrptApi {
         private String doc_id;
         private String doc_status;
         private String doc_type;
-        private boolean importRequest;
+        private String importRequest;
         private String owner_inn;
         private String participant_inn;
         private String producer_inn;
@@ -60,6 +60,144 @@ public class CrptApi {
         private Product[] products;
         private String reg_date;
         private String reg_number;
+
+        public Document() {}
+
+        public String toJsonString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("{");
+
+            if (description != null) {
+                sb.append("\"description\":").append(description.toJsonString()).append(",");
+            } else {
+                sb.append("\"description\":null,");
+            }
+            appendField(sb, "doc_id", doc_id, true);
+            appendField(sb, "doc_status", doc_status, true);
+            appendField(sb, "doc_type", doc_type, true);
+            appendField(sb, "importRequest", importRequest, true);
+            appendField(sb, "owner_inn", owner_inn, true);
+            appendField(sb, "participant_inn", participant_inn, true);
+            appendField(sb, "producer_inn", producer_inn, true);
+            appendField(sb, "production_date", production_date, true);
+            appendField(sb, "production_type", production_type, true);
+
+            if (products != null && products.length > 0) {
+                sb.append("\"products\":[");
+                for(int i = 0; i < products.length; i++) {
+                    if(i > 0) sb.append(",");
+                    sb.append(products[i].toJsonString());
+                }
+                sb.append("]");
+            } else {
+                sb.append("\"products\":[],");
+            }
+            appendField(sb, "reg_date", reg_date, true);
+            appendField(sb, "reg_number", reg_number, false);
+            sb.append("}");
+            return sb.toString();
+        }
+
+        private void appendField(StringBuilder sb, String fieldName, String value, boolean addComa) {
+            if (value != null) {
+                sb.append(String.format("\"%s\":\"%s\"", fieldName, escapeJsonString(value)));
+            }
+        }
+
+        private String escapeJsonString(String value) {
+            if (value == null) {
+                return "";
+            } else {
+                return value.replace("\\", "\\\\")
+                        .replace("\"", "\\\"")
+                        .replace("\b", "\\b")
+                        .replace("\f", "\\f")
+                        .replace("\n", "\\n")
+                        .replace("\r", "\\r")
+                        .replace("\t", "\\t");
+            }
+        }
+
+        public Description getDescription() {
+            return description;
+        }
+        public void setDescription(Description description) {
+            this.description = description;
+        }
+        public String getDoc_id() {
+            return doc_id;
+        }
+        public void setDoc_id(String doc_id) {
+            this.doc_id = doc_id;
+        }
+        public String getDoc_status() {
+            return doc_status;
+        }
+        public void setDoc_status(String doc_status) {
+            this.doc_status = doc_status;
+        }
+        public String getDoc_type() {
+            return doc_type;
+        }
+        public void setDoc_type(String doc_type) {
+            this.doc_type = doc_type;
+        }
+        public String getImportRequest() {
+            return importRequest;
+        }
+        public void setImportRequest(String importRequest) {
+            this.importRequest = importRequest;
+        }
+        public String getOwner_inn() {
+            return owner_inn;
+        }
+        public void setOwner_inn(String owner_inn) {
+            this.owner_inn = owner_inn;
+        }
+        public String getParticipant_inn() {
+            return participant_inn;
+        }
+        public void setParticipant_inn(String participant_inn) {
+            this.participant_inn = participant_inn;
+        }
+        public String getProducer_inn() {
+            return producer_inn;
+        }
+        public void setProducer_inn(String producer_inn) {
+            this.producer_inn = producer_inn;
+        }
+        public String getProduction_date() {
+            return production_date;
+        }
+        public void setProduction_date(String production_date) {
+            this.production_date = production_date;
+        }
+        public String getProduction_type() {
+            return production_type;
+        }
+        public void setProduction_type(String production_type) {
+            this.production_type = production_type;
+        }
+        public Product[] getProducts() {
+            return products;
+        }
+        public void setProducts(Product[] products) {
+            this.products = products;
+        }
+        public String getReg_date() {
+            return reg_date;
+        }
+        public void setReg_date(String reg_date) {
+            this.reg_date = reg_date;
+        }
+        public String getReg_number() {
+            return reg_number;
+        }
+        public void setReg_number(String reg_number) {
+            this.reg_number = reg_number;
+        }
+
+
 
 
     }
@@ -160,12 +298,6 @@ public class CrptApi {
             this.uitu_code = uitu_code;
         }
 
-        private void appendField(StringBuilder sb, String fieldName, String value, boolean addComma) {
-            if (value != null) {
-                sb.append(String.format("\"%s\":\"%s\"", fieldName, escapeJsonString(value)));
-                if (addComma) sb.append(",");
-            }
-        }
 
         public String toJsonString() {
             StringBuilder sb = new StringBuilder();
@@ -182,6 +314,13 @@ public class CrptApi {
 
             sb.append("}");
             return sb.toString();
+        }
+
+        private void appendField(StringBuilder sb, String fieldName, String value, boolean addComma) {
+            if (value != null) {
+                sb.append(String.format("\"%s\":\"%s\"", fieldName, escapeJsonString(value)));
+                if (addComma) sb.append(",");
+            }
         }
 
         public String escapeJsonString(String value) {
